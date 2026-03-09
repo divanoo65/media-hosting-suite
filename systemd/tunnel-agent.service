@@ -1,0 +1,14 @@
+[Unit]
+Description=Tunnel Agent (vyibc.com public domain)
+After=network.target
+
+[Service]
+WorkingDirectory=/root
+ExecStart=/root/.tunneling/bin/agent
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/tunnel-agent.log
+StandardError=append:/var/log/tunnel-agent.log
+
+[Install]
+WantedBy=multi-user.target

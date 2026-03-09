@@ -1,0 +1,15 @@
+[Unit]
+Description=Image Generation & Document API (Flask)
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/media-hosting-suite/api
+EnvironmentFile=-/opt/media-hosting-suite/.env
+ExecStart=/usr/bin/python3 /opt/media-hosting-suite/api/server.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/media-api.log
+StandardError=append:/var/log/media-api.log
+
+[Install]
+WantedBy=multi-user.target
