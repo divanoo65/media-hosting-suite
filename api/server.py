@@ -17,7 +17,7 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBLhPHdw7SSgiTM5wJZLzPyX1kmAZEpGI0")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_BASE    = "https://generativelanguage.googleapis.com"
 IMAGE_DIR      = "/var/www/images"
 PUBLIC_BASE    = os.environ.get("PUBLIC_BASE", "https://images-mvac6g.vyibc.com")
