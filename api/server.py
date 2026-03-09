@@ -20,7 +20,7 @@ app = Flask(__name__)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_BASE    = "https://generativelanguage.googleapis.com"
 IMAGE_DIR      = "/var/www/images"
-PUBLIC_BASE    = os.environ.get("PUBLIC_BASE", "https://images-mvac6g.vyibc.com")
+PUBLIC_BASE    = os.environ.get("PUBLIC_BASE", "")
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -257,22 +257,35 @@ def _fmt_size(n):
 
 
 def _render_admin(files):
-    import time
+    import time, json
     rows = ""
     for f in files:
-        icon = "🖼️" if f["type"] == "image" else "📄" if f["type"] == "page" else "📎"
-        preview = f'<img src="{f["url"]}" style="max-height:48px;max-width:80px;border-radius:4px;object-fit:cover;" onerror="this.style.display=\'none\'">' if f["type"] == "image" else ""
+        # 缩略图
+        if f["type"] == "image":
+            thumb = f'<img src="{f["url"]}" class="thumb" onclick="openPreview({json.dumps(f["url"])},{json.dumps(f["name"])},{json.dumps(f["type"])})" onerror="this.outerHTML=\'🖼️\'">'
+        elif f["type"] == "page":
+            thumb = f'<span class="icon-btn" onclick="openPreview({json.dumps(f["url"])},{json.dumps(f["name"])},{json.dumps(f["type"])})">📄</span>'
+        else:
+            thumb = "📎"
+
         mtime = time.strftime("%Y-%m-%d %H:%M", time.localtime(f["mtime"]))
+        # URL 复制按钮
+        url_cell = f'''<div class="url-row">
+            <span class="url-text">{f["url"]}</span>
+            <button class="copy-btn" onclick="copyUrl({json.dumps(f["url"])},this)" title="复制链接">⎘</button>
+          </div>'''
         rows += f"""
         <tr>
-          <td style="padding:10px 8px;border-bottom:1px solid #2a2a3a">{preview or icon}</td>
-          <td style="padding:10px 8px;border-bottom:1px solid #2a2a3a;word-break:break-all">
-            <a href="{f['url']}" target="_blank" style="color:#7dd3fc;text-decoration:none">{f['name']}</a>
+          <td class="td-thumb">{thumb}</td>
+          <td class="td-name">
+            <a href="{f['url']}" target="_blank" class="fname">{f['name']}</a>
+            {url_cell}
           </td>
-          <td style="padding:10px 8px;border-bottom:1px solid #2a2a3a;color:#94a3b8;white-space:nowrap">{_fmt_size(f['size'])}</td>
-          <td style="padding:10px 8px;border-bottom:1px solid #2a2a3a;color:#94a3b8;white-space:nowrap">{mtime}</td>
-          <td style="padding:10px 8px;border-bottom:1px solid #2a2a3a">
-            <button onclick="delFile('{f['name']}')" style="background:#ef4444;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px">删除</button>
+          <td class="td-meta">{_fmt_size(f['size'])}</td>
+          <td class="td-meta">{mtime}</td>
+          <td class="td-action">
+            <button onclick="openPreview({json.dumps(f['url'])},{json.dumps(f['name'])},{json.dumps(f['type'])})" class="btn-preview">预览</button>
+            <button onclick="delFile({json.dumps(f['name'])})" class="btn-del">删除</button>
           </td>
         </tr>"""
 
@@ -287,33 +300,64 @@ def _render_admin(files):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>文件管理 - Media Hosting Suite</title>
 <style>
-  * {{ box-sizing:border-box;margin:0;padding:0 }}
-  body {{ background:#0f0f1a;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh }}
-  .header {{ background:linear-gradient(135deg,#1e1b4b,#312e81);padding:24px 32px;border-bottom:1px solid #2a2a4a }}
-  .header h1 {{ font-size:1.6rem;font-weight:700;color:#a5b4fc }}
-  .header p {{ color:#94a3b8;margin-top:4px;font-size:.9rem }}
-  .container {{ max-width:1100px;margin:0 auto;padding:24px }}
-  .stats {{ display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap }}
-  .stat {{ background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;padding:16px 24px;flex:1;min-width:140px }}
-  .stat .num {{ font-size:2rem;font-weight:700;color:#a5b4fc }}
-  .stat .label {{ color:#64748b;font-size:.85rem;margin-top:2px }}
-  .card {{ background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;overflow:hidden }}
-  .card-header {{ padding:16px 20px;border-bottom:1px solid #2a2a4a;display:flex;justify-content:space-between;align-items:center }}
-  .card-header h2 {{ font-size:1rem;color:#cbd5e1 }}
-  .upload-btn {{ background:#6366f1;color:#fff;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:.9rem }}
-  .upload-btn:hover {{ background:#4f46e5 }}
-  table {{ width:100%;border-collapse:collapse }}
-  thead th {{ padding:10px 8px;text-align:left;font-size:.8rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #2a2a4a }}
-  tbody tr:hover {{ background:#1f1f35 }}
-  .empty {{ text-align:center;padding:60px;color:#475569 }}
-  .modal {{ display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center }}
-  .modal.show {{ display:flex }}
-  .modal-box {{ background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;padding:28px;max-width:400px;width:90% }}
-  .modal-box h3 {{ margin-bottom:16px;color:#e2e8f0 }}
-  .modal-box input[type=file] {{ width:100%;padding:10px;background:#0f0f1a;border:1px solid #3a3a5a;border-radius:8px;color:#e2e8f0;margin-bottom:16px }}
-  .btn-row {{ display:flex;gap:8px;justify-content:flex-end }}
-  .btn-cancel {{ background:transparent;color:#94a3b8;border:1px solid #3a3a5a;padding:8px 16px;border-radius:8px;cursor:pointer }}
-  .btn-upload {{ background:#6366f1;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer }}
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#0f0f1a;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}}
+  .header{{background:linear-gradient(135deg,#1e1b4b,#312e81);padding:24px 32px;border-bottom:1px solid #2a2a4a}}
+  .header h1{{font-size:1.5rem;font-weight:700;color:#a5b4fc}}
+  .header p{{color:#94a3b8;margin-top:4px;font-size:.9rem}}
+  .container{{max-width:1200px;margin:0 auto;padding:24px}}
+  .stats{{display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap}}
+  .stat{{background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;padding:16px 24px;flex:1;min-width:130px}}
+  .stat .num{{font-size:2rem;font-weight:700;color:#a5b4fc}}
+  .stat .label{{color:#64748b;font-size:.85rem;margin-top:2px}}
+  .card{{background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;overflow:hidden}}
+  .card-header{{padding:16px 20px;border-bottom:1px solid #2a2a4a;display:flex;justify-content:space-between;align-items:center}}
+  .card-header h2{{font-size:1rem;color:#cbd5e1}}
+  .upload-btn{{background:#6366f1;color:#fff;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:.9rem}}
+  .upload-btn:hover{{background:#4f46e5}}
+  table{{width:100%;border-collapse:collapse}}
+  thead th{{padding:10px 8px;text-align:left;font-size:.75rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #2a2a4a}}
+  tbody tr{{border-bottom:1px solid #1e1e30}}
+  tbody tr:hover{{background:#1c1c32}}
+  .td-thumb{{padding:8px;width:72px}}
+  .td-name{{padding:8px 12px}}
+  .td-meta{{padding:8px;color:#64748b;font-size:.85rem;white-space:nowrap}}
+  .td-action{{padding:8px;white-space:nowrap}}
+  .thumb{{width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid #2a2a4a;transition:.2s;display:block}}
+  .thumb:hover{{transform:scale(1.08);border-color:#6366f1}}
+  .icon-btn{{font-size:1.8rem;cursor:pointer}}
+  .fname{{color:#7dd3fc;text-decoration:none;font-size:.9rem;font-weight:500;display:block;margin-bottom:4px}}
+  .fname:hover{{color:#bae6fd}}
+  .url-row{{display:flex;align-items:center;gap:6px}}
+  .url-text{{font-size:.75rem;color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px}}
+  .copy-btn{{background:transparent;border:1px solid #3a3a5a;color:#94a3b8;border-radius:5px;padding:2px 8px;cursor:pointer;font-size:.85rem;flex-shrink:0;transition:.15s}}
+  .copy-btn:hover{{background:#6366f1;border-color:#6366f1;color:#fff}}
+  .copy-btn.copied{{background:#22c55e;border-color:#22c55e;color:#fff}}
+  .btn-preview{{background:transparent;border:1px solid #6366f1;color:#a5b4fc;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem;margin-right:4px}}
+  .btn-preview:hover{{background:#6366f1;color:#fff}}
+  .btn-del{{background:transparent;border:1px solid #ef4444;color:#f87171;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.8rem}}
+  .btn-del:hover{{background:#ef4444;color:#fff}}
+  .empty{{text-align:center;padding:60px;color:#475569}}
+  /* Upload modal */
+  .modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center}}
+  .modal.show{{display:flex}}
+  .modal-box{{background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;padding:28px;width:90%;max-width:420px}}
+  .modal-box h3{{margin-bottom:16px;color:#e2e8f0}}
+  .modal-box input[type=file]{{width:100%;padding:10px;background:#0f0f1a;border:1px solid #3a3a5a;border-radius:8px;color:#e2e8f0;margin-bottom:16px}}
+  .btn-row{{display:flex;gap:8px;justify-content:flex-end}}
+  .btn-cancel{{background:transparent;color:#94a3b8;border:1px solid #3a3a5a;padding:8px 16px;border-radius:8px;cursor:pointer}}
+  .btn-upload{{background:#6366f1;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer}}
+  /* Preview modal */
+  .preview-modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;flex-direction:column;align-items:center;justify-content:center}}
+  .preview-modal.show{{display:flex}}
+  .preview-header{{position:absolute;top:0;left:0;right:0;padding:12px 20px;background:rgba(15,15,26,.9);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #2a2a4a}}
+  .preview-title{{color:#e2e8f0;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%}}
+  .preview-actions{{display:flex;gap:8px;align-items:center}}
+  .preview-img{{max-width:90vw;max-height:85vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.8)}}
+  .preview-iframe{{width:90vw;height:85vh;border:none;border-radius:8px;background:#fff;margin-top:52px}}
+  .close-btn{{background:transparent;border:1px solid #4a4a6a;color:#94a3b8;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:.85rem}}
+  .close-btn:hover{{background:#ef4444;border-color:#ef4444;color:#fff}}
+  .prev-copy-btn{{background:#6366f1;border:none;color:#fff;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:.85rem}}
 </style>
 </head>
 <body>
@@ -333,7 +377,7 @@ def _render_admin(files):
       <button class="upload-btn" onclick="document.getElementById('uploadModal').classList.add('show')">⬆ 上传文件</button>
     </div>
     <table>
-      <thead><tr><th>预览</th><th>文件名</th><th>大小</th><th>时间</th><th>操作</th></tr></thead>
+      <thead><tr><th>缩略图</th><th>文件名 / 访问地址</th><th>大小</th><th>时间</th><th>操作</th></tr></thead>
       <tbody>{"<tr><td colspan='5' class='empty'>暂无文件</td></tr>" if not rows else rows}</tbody>
     </table>
   </div>
@@ -351,14 +395,77 @@ def _render_admin(files):
   </div>
 </div>
 
+<!-- Preview Modal -->
+<div class="preview-modal" id="previewModal" onclick="closePreviewIfBg(event)">
+  <div class="preview-header">
+    <span class="preview-title" id="previewTitle"></span>
+    <div class="preview-actions">
+      <button class="prev-copy-btn" id="previewCopyBtn" onclick="copyPreviewUrl()">⎘ 复制链接</button>
+      <a id="previewOpenLink" href="#" target="_blank"><button class="prev-copy-btn" style="background:#0ea5e9">↗ 新窗口打开</button></a>
+      <button class="close-btn" onclick="closePreview()">✕ 关闭</button>
+    </div>
+  </div>
+  <div id="previewContent" style="margin-top:52px;display:flex;align-items:center;justify-content:center"></div>
+</div>
+
 <script>
+let _previewUrl = '';
+
+function openPreview(url, name, type) {{
+  _previewUrl = url;
+  document.getElementById('previewTitle').textContent = name;
+  document.getElementById('previewOpenLink').href = url;
+  document.getElementById('previewCopyBtn').textContent = '⎘ 复制链接';
+  document.getElementById('previewCopyBtn').style.background = '#6366f1';
+  const box = document.getElementById('previewContent');
+  if (type === 'image') {{
+    box.innerHTML = '<img class="preview-img" src="' + url + '" alt="' + name + '">';
+  }} else if (type === 'page') {{
+    box.innerHTML = '<iframe class="preview-iframe" src="' + url + '"></iframe>';
+    box.firstChild.style.marginTop = '0';
+    box.style.marginTop = '52px';
+  }} else {{
+    box.innerHTML = '<p style="color:#94a3b8">该文件类型暂不支持预览</p>';
+  }}
+  document.getElementById('previewModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}}
+
+function closePreview() {{
+  document.getElementById('previewModal').classList.remove('show');
+  document.getElementById('previewContent').innerHTML = '';
+  document.body.style.overflow = '';
+}}
+
+function closePreviewIfBg(e) {{
+  if (e.target === document.getElementById('previewModal')) closePreview();
+}}
+
+function copyPreviewUrl() {{
+  navigator.clipboard.writeText(_previewUrl).then(() => {{
+    const btn = document.getElementById('previewCopyBtn');
+    btn.textContent = '✓ 已复制';
+    btn.style.background = '#22c55e';
+    setTimeout(() => {{ btn.textContent = '⎘ 复制链接'; btn.style.background = '#6366f1'; }}, 2000);
+  }});
+}}
+
+function copyUrl(url, btn) {{
+  navigator.clipboard.writeText(url).then(() => {{
+    btn.textContent = '✓';
+    btn.classList.add('copied');
+    setTimeout(() => {{ btn.textContent = '⎘'; btn.classList.remove('copied'); }}, 2000);
+  }});
+}}
+
 async function delFile(name) {{
   if (!confirm('确认删除 ' + name + ' ?')) return;
   const r = await fetch('/admin/delete/' + name, {{method:'POST'}});
   const d = await r.json();
   if (d.ok) location.reload();
-  else alert('删除失败: ' + (d.error||'未知错误'));
+  else alert('删除失败: ' + (d.error || '未知'));
 }}
+
 async function doUpload() {{
   const input = document.getElementById('uploadInput');
   if (!input.files.length) {{ alert('请选择文件'); return; }}
@@ -366,9 +473,11 @@ async function doUpload() {{
   fd.append('file', input.files[0]);
   const r = await fetch('/admin/upload', {{method:'POST', body:fd}});
   const d = await r.json();
-  if (d.ok) {{ location.reload(); }}
-  else alert('上传失败: ' + (d.error||'未知'));
+  if (d.ok) location.reload();
+  else alert('上传失败: ' + (d.error || '未知'));
 }}
+
+document.addEventListener('keydown', e => {{ if (e.key === 'Escape') closePreview(); }});
 </script>
 </body>
 </html>"""
